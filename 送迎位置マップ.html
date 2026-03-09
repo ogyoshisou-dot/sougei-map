@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>送迎利用者 位置マップ</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans JP',sans-serif;height:100vh;display:flex;flex-direction:column;background:#111827;overflow:hidden}
+
+header{background:#1e2d4a;color:#fff;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #2a3d5c;z-index:500}
+header h1{font-size:.88rem;font-weight:900;letter-spacing:.05em;white-space:nowrap}
+.legend{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.leg{display:flex;align-items:center;gap:4px;font-size:.7rem;cursor:pointer;padding:3px 9px;border-radius:20px;border:1.5px solid transparent;transition:opacity .2s;user-select:none;font-weight:700;white-space:nowrap}
+.leg.off{opacity:.3}
+.leg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.hdr-r{margin-left:auto;display:flex;gap:7px;align-items:center}
+.hbtn{border-radius:6px;padding:5px 11px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .2s;border:1.5px solid}
+#moveBtn{background:#1a3a1a;color:#7ad07a;border-color:#2a5a2a}
+#moveBtn:hover{background:#254a25}
+#moveBtn.active{background:#2a5a2a;color:#aafaaa;border-color:#4a8a4a;box-shadow:0 0 8px rgba(100,220,100,.35)}
+#editBtn{background:#243a5e;color:#7ab4e0;border-color:#3a5a80}
+#editBtn:hover{background:#2e4a70}
+
+#dragHint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1a3a1a;color:#7ad07a;border:1.5px solid #2a5a2a;border-radius:8px;padding:8px 18px;font-size:.75rem;font-weight:700;z-index:800;display:none;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.5)}
+#dragHint.show{display:block}
+
+#map{flex:1}
+
+#panel{position:fixed;top:0;right:-420px;width:390px;height:100%;background:#1a2540;border-left:1px solid #2a3a58;z-index:2000;display:flex;flex-direction:column;transition:right .3s ease;box-shadow:-4px 0 20px rgba(0,0,0,.5)}
+#panel.open{right:0}
+.ph{background:#1e2d4a;padding:12px 14px;border-bottom:1px solid #2a3a58;display:flex;align-items:center;gap:10px}
+.ph h2{font-size:.88rem;font-weight:900;color:#c8daf0;flex:1}
+#closeBtn{background:none;border:none;color:#5a7a9a;font-size:1.2rem;cursor:pointer;padding:2px 6px;line-height:1}
+#closeBtn:hover{color:#f07070}
+.af{padding:12px 14px;border-bottom:1px solid #2a3a58;background:#1e2d4a}
+.af h3{font-size:.74rem;font-weight:700;color:#7a98b8;margin-bottom:9px;letter-spacing:.04em}
+.fr{margin-bottom:6px}
+.fr label{display:block;font-size:.65rem;color:#5a7a9a;margin-bottom:2px;font-weight:700}
+.fr input,.fr select{width:100%;background:#0f1a2e;border:1px solid #2a3a58;border-radius:5px;color:#c8daf0;padding:5px 7px;font-size:.73rem;font-family:inherit;outline:none;transition:border-color .2s}
+.fr input:focus,.fr select:focus{border-color:#4a7ab0}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+.fr2 .fr{margin-bottom:0}
+.hint-box{font-size:.62rem;color:#3a5070;line-height:1.7;background:#0f1a2e;border-radius:4px;padding:7px 9px;margin-bottom:7px}
+.hint-box b{color:#5a8ab0}
+#addBtn{width:100%;background:#1e4a2e;color:#6dd18a;border:1.5px solid #2e6a3e;border-radius:5px;padding:7px;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s}
+#addBtn:hover{background:#2a5a38}
+.ul-wrap{flex:1;overflow-y:auto;padding:8px 10px}
+.ul-wrap::-webkit-scrollbar{width:4px}
+.ul-wrap::-webkit-scrollbar-thumb{background:#2a3a58;border-radius:2px}
+.sec-title{font-size:.66rem;font-weight:700;letter-spacing:.08em;padding:3px 6px;border-radius:4px;margin:7px 0 3px}
+.urow{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:5px;margin-bottom:2px;background:rgba(255,255,255,.03);border:1px solid transparent;cursor:pointer;transition:background .15s}
+.urow:hover{background:rgba(255,255,255,.07)}
+.udot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.uname{flex:1;font-size:.76rem;color:#c8daf0;font-weight:500}
+.xbtn{background:none;border:none;color:#3a5a78;font-size:.9rem;cursor:pointer;padding:0 4px;line-height:1;transition:color .15s;flex-shrink:0}
+.xbtn:hover{color:#f07070}
+.pf{padding:8px 14px;border-top:1px solid #2a3a58;background:#151e30;display:flex;flex-direction:column;gap:5px}
+.pfbtn{width:100%;background:none;border-radius:5px;padding:5px;font-size:.67rem;cursor:pointer;font-family:inherit;transition:all .2s}
+#resetPosBtn{border:1px solid #2a4a2a;color:#3a6a3a}
+#resetPosBtn:hover{border-color:#6dd18a;color:#6dd18a}
+#resetBtn{border:1px solid #2a3038;color:#4a5a6a}
+#resetBtn:hover{border-color:#f07070;color:#f07070}
+
+.leaflet-popup-content-wrapper{background:#1e2d45;color:#e8edf5;border-radius:8px;border:1px solid #2a4060;box-shadow:0 4px 16px rgba(0,0,0,.6)}
+.leaflet-popup-tip{background:#1e2d45}
+.leaflet-popup-content{margin:10px 14px;font-family:'Noto Sans JP',sans-serif;min-width:130px}
+.ppb{display:inline-block;font-size:.63rem;font-weight:700;padding:1px 7px;border-radius:10px;margin-bottom:5px}
+.ppn{font-size:.95rem;font-weight:700;color:#e8edf5;margin-bottom:3px}
+.ppsub{font-size:.7rem;color:#6a8aaa}
+.ppdrag{font-size:.65rem;color:#5a9a5a;margin-top:5px;padding-top:5px;border-top:1px solid #2a4060}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚐 送迎利用者 位置マップ</h1>
+  <div class="legend">
+    <div class="leg on" id="leg-北部"     onclick="toggleArea('北部',this)"     style="background:#0d2035;color:#5bc8f5;border-color:#5bc8f5"><div class="leg-dot" style="background:#5bc8f5"></div>北部</div>
+    <div class="leg on" id="leg-西部"     onclick="toggleArea('西部',this)"     style="background:#0d2318;color:#6dd18a;border-color:#6dd18a"><div class="leg-dot" style="background:#6dd18a"></div>西部</div>
+    <div class="leg on" id="leg-南部西部" onclick="toggleArea('南部西部',this)" style="background:#271e08;color:#f5c030;border-color:#f5c030"><div class="leg-dot" style="background:#f5c030"></div>南部・西部</div>
+    <div class="leg on" id="leg-南部"     onclick="toggleArea('南部',this)"     style="background:#270e0e;color:#f07070;border-color:#f07070"><div class="leg-dot" style="background:#f07070"></div>南部</div>
+  </div>
+  <div class="hdr-r">
+    <button id="moveBtn" class="hbtn" onclick="toggleDrag()">📌 位置を修正する</button>
+    <button id="editBtn" class="hbtn" onclick="openPanel()">✏️ 利用者を追加・削除</button>
+  </div>
+</header>
+
+<div id="map"></div>
+<div id="dragHint">📌 ドラッグモード ON ─ 名前ラベルをドラッグして正しい位置に動かしてください（自動保存）</div>
+
+<div id="panel">
+  <div class="ph"><h2>✏️ 利用者の編集</h2><button id="closeBtn" onclick="closePanel()">✕</button></div>
+  <div class="af">
+    <h3>▶ 新しい利用者を追加</h3>
+    <div class="fr2">
+      <div class="fr"><label>名前</label><input id="fn" placeholder="例：田中 太郎"></div>
+      <div class="fr"><label>エリア</label>
+        <select id="fa">
+          <option value="北部">北部</option>
+          <option value="西部">西部</option>
+          <option value="南部西部">南部・西部</option>
+          <option value="南部" selected>南部</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr"><label>送迎場所（表示用）</label><input id="fp" placeholder="例：自宅前、阪急○○駅など"></div>
+    <div class="fr2">
+      <div class="fr"><label>緯度</label><input type="number" id="flat" placeholder="34.780" step="0.0001"></div>
+      <div class="fr"><label>経度</label><input type="number" id="flng" placeholder="135.410" step="0.0001"></div>
+    </div>
+    <div class="hint-box">
+      📍 <b>緯度・経度の調べ方</b><br>
+      Googleマップで場所を検索 → 地図上を<b>右クリック</b><br>
+      → 一番上の数字（34.xxx, 135.xxx）をクリックでコピー<br>
+      追加後は「📌 位置を修正する」でドラッグ調整もできます
+    </div>
+    <button id="addBtn" onclick="addUser()">＋ 追加する</button>
+  </div>
+  <div class="ul-wrap" id="panelList"></div>
+  <div class="pf">
+    <button class="pfbtn" id="resetPosBtn" onclick="resetPositions()">📌 位置のみリセット（名前・送迎場所は維持）</button>
+    <button class="pfbtn" id="resetBtn"    onclick="resetAll()">⚠️ すべて初期データに戻す</button>
+  </div>
+</div>
+
+<script>
+const AREAS = {
+  '北部':     {color:'#5bc8f5', text:'#041828', label:'北部'},
+  '西部':     {color:'#6dd18a', text:'#041808', label:'西部'},
+  '南部西部': {color:'#f5c030', text:'#1e1000', label:'南部・西部'},
+  '南部':     {color:'#f07070', text:'#1e0404', label:'南部'},
+};
+
+// ================================================================
+// ★ 利用者データ（座標はGoogleマップ・地理情報をもとに設定）
+//   ズレている場合は「📌 位置を修正する」でドラッグして修正してください
+// ================================================================
+const DEFAULT_USERS = [
+  // ── 北部 ──────────────────────────────────────────────────
+  {area:'北部',    name:'宮前 誠一朗', pickup:'自宅前',              lat:34.8182, lng:135.4268},
+  {area:'北部',    name:'足立 光明',   pickup:'自宅前',              lat:34.8435, lng:135.4782},
+  {area:'北部',    name:'佐藤 光',     pickup:'自宅前',              lat:34.8378, lng:135.4642},
+  {area:'北部',    name:'酒井 千鶴',   pickup:'自宅前',              lat:34.8268, lng:135.4095},
+  {area:'北部',    name:'滝沢 夢絃',   pickup:'エクセレント花屋敷前', lat:34.8088, lng:135.3815},
+
+  // ── 西部 ──────────────────────────────────────────────────
+  {area:'西部',    name:'田楽 幸寿丸', pickup:'自宅前',              lat:34.7892, lng:135.3692},
+  {area:'西部',    name:'田中 孝明',   pickup:'マンション東側',       lat:34.7912, lng:135.4082},
+  {area:'西部',    name:'和田 祐二',   pickup:'マンション前駐車場',   lat:34.7975, lng:135.4068},
+  {area:'西部',    name:'田邊 静佳',   pickup:'マンション東側スペース',lat:34.7968, lng:135.3702},
+
+  // ── 南部・西部 ────────────────────────────────────────────
+  {area:'南部西部',name:'毛戸 孝明',   pickup:'自宅前',              lat:34.7632, lng:135.4018},
+  {area:'南部西部',name:'片山 直之',   pickup:'自宅前',              lat:34.7552, lng:135.4002},
+  {area:'南部西部',name:'石坪 直樹',   pickup:'自宅前',              lat:34.7705, lng:135.4125},
+  {area:'南部西部',name:'寺中 和美',   pickup:'自宅前',              lat:34.7828, lng:135.4172},
+  {area:'南部西部',name:'富田 華輝',   pickup:'自宅前',              lat:34.7788, lng:135.4058},
+
+  // ── 南部 ──────────────────────────────────────────────────
+  {area:'南部',    name:'川端 勉',     pickup:'Wam新伊丹校前',        lat:34.7692, lng:135.4298},
+  {area:'南部',    name:'北野 祐史',   pickup:'自宅前',              lat:34.7728, lng:135.4215},
+  {area:'南部',    name:'安井 智也',   pickup:'ローソンストア100前',  lat:34.7782, lng:135.4205},
+  {area:'南部',    name:'林 佳祐',     pickup:'自宅前T字路付近',      lat:34.7278, lng:135.3968},
+  {area:'南部',    name:'山本 守',     pickup:'自宅前',              lat:34.7602, lng:135.3825},
+  {area:'南部',    name:'中村 桜嘉',   pickup:'自宅前',              lat:34.7442, lng:135.4082},
+  {area:'南部',    name:'木村 千尋',   pickup:'阪急園田駅高架下',     lat:34.7415, lng:135.4162},
+  {area:'南部',    name:'井上 篤子',   pickup:'自宅前',              lat:34.7432, lng:135.4055},
+  {area:'南部',    name:'豊田 明子',   pickup:'JR尼崎駅北ロータリー', lat:34.7228, lng:135.4148},
+  {area:'南部',    name:'豊田 春奈',   pickup:'自宅前',              lat:34.7558, lng:135.4225},
+  {area:'南部',    name:'金子 浩',     pickup:'自宅前',              lat:34.7502, lng:135.4115},
+  {area:'南部',    name:'吉田 千里',   pickup:'JR尼崎駅北ロータリー', lat:34.7232, lng:135.4155},
+  {area:'南部',    name:'久米 亜由美', pickup:'自宅前',              lat:34.7335, lng:135.4168},
+  {area:'南部',    name:'中村 茉由莉', pickup:'自宅前',              lat:34.7692, lng:135.4208},
+  {area:'南部',    name:'架間 雄',     pickup:'自宅前',              lat:34.7572, lng:135.4372},
+  {area:'南部',    name:'姜 成一',     pickup:'グルホ1階作業所前',    lat:34.7222, lng:135.4072},
+];
+
+// 事業所（伊丹市北園2-2-5 ノースコートⅡ）
+const DEFAULT_OFFICE = {lat:34.7868, lng:135.4202};
+
+// ================================================================
+// データ管理
+// ================================================================
+const UKEY = 'sougei_u8';
+const OKEY = 'sougei_o8';
+function loadU(){ try{const s=localStorage.getItem(UKEY);if(s)return JSON.parse(s);}catch(e){}return cloneD(DEFAULT_USERS); }
+function saveU(u){ try{localStorage.setItem(UKEY,JSON.stringify(u));}catch(e){} }
+function loadO(){ try{const s=localStorage.getItem(OKEY);if(s)return JSON.parse(s);}catch(e){}return {...DEFAULT_OFFICE}; }
+function saveO(o){ try{localStorage.setItem(OKEY,JSON.stringify(o));}catch(e){} }
+function cloneD(x){ return JSON.parse(JSON.stringify(x)); }
+
+let users  = loadU();
+let office = loadO();
+
+// ================================================================
+// 地図
+// ================================================================
+const map = L.map('map',{center:[34.77,135.41],zoom:12});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:19
+}).addTo(map);
+
+const layers = {
+  '北部':L.layerGroup().addTo(map),
+  '西部':L.layerGroup().addTo(map),
+  '南部西部':L.layerGroup().addTo(map),
+  '南部':L.layerGroup().addTo(map),
+};
+
+let officeMarker = null;
+let dragMode = false;
+
+// ================================================================
+// 重なり防止
+// ================================================================
+function spread(list){
+  const THRESH = 0.0015;
+  const out = list.map(u=>({...u}));
+  const used = new Array(out.length).fill(false);
+  for(let i=0;i<out.length;i++){
+    if(used[i]) continue;
+    const grp=[i];
+    for(let j=i+1;j<out.length;j++){
+      if(used[j]) continue;
+      if(Math.abs(out[i]._lat-out[j]._lat)<THRESH&&Math.abs(out[i]._lng-out[j]._lng)<THRESH){
+        grp.push(j);used[j]=true;
+      }
+    }
+    used[i]=true;
+    if(grp.length<2) continue;
+    const cLat=grp.reduce((s,k)=>s+out[k]._lat,0)/grp.length;
+    const cLng=grp.reduce((s,k)=>s+out[k]._lng,0)/grp.length;
+    const r=0.0009*(1+Math.floor((grp.length-1)/5)*0.55);
+    grp.forEach((k,idx)=>{
+      const a=(2*Math.PI*idx/grp.length)-Math.PI/2;
+      out[k]._lat=cLat+r*Math.cos(a);
+      out[k]._lng=cLng+r*Math.sin(a)*1.5;
+    });
+  }
+  return out;
+}
+
+// ================================================================
+// マーカー描画
+// ================================================================
+function buildMarkers(){
+  Object.values(layers).forEach(lg=>lg.clearLayers());
+  if(officeMarker){ officeMarker.remove(); officeMarker=null; }
+
+  // 利用者
+  const list = users.map((u,i)=>({...u,_lat:u.lat,_lng:u.lng,_idx:i}));
+  const sp   = spread(list);
+  const bounds = [];
+
+  sp.forEach(u=>{
+    const a=AREAS[u.area]; if(!a) return;
+    const lastName=u.name.split(' ')[0];
+
+    const icon=mkIcon(a.color,a.text,lastName,dragMode);
+    const popup=`<div>
+      <div class="ppb" style="background:${a.color}25;color:${a.color};border:1px solid ${a.color}55">${a.label}</div>
+      <div class="ppn">${u.name}</div>
+      <div class="ppsub">${u.pickup}</div>
+      ${dragMode?'<div class="ppdrag">📌 ドラッグして位置を修正できます</div>':''}
+    </div>`;
+
+    const m=L.marker([u._lat,u._lng],{icon,draggable:dragMode})
+      .bindPopup(popup,{maxWidth:220});
+
+    m.on('dragend',e=>{
+      const {lat,lng}=e.target.getLatLng();
+      users[u._idx].lat=Math.round(lat*100000)/100000;
+      users[u._idx].lng=Math.round(lng*100000)/100000;
+      saveU(users);
+      m.bindPopup(`<div>
+        <div class="ppb" style="background:${a.color}25;color:${a.color};border:1px solid ${a.color}55">${a.label}</div>
+        <div class="ppn">${u.name}</div>
+        <div class="ppdrag">✅ 保存しました</div>
+      </div>`,{maxWidth:220}).openPopup();
+    });
+
+    m.addTo(layers[u.area]);
+    bounds.push([u._lat,u._lng]);
+  });
+
+  // 事業所
+  const offIcon=L.divIcon({
+    className:'',
+    html:`<div style="background:#ff6b35;color:#fff;font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;border:2.5px solid ${dragMode?'#aaffaa':'rgba(255,255,255,.9)'};box-shadow:${dragMode?'0 0 10px rgba(100,220,100,.5),':''}0 0 12px rgba(255,107,53,.6),0 2px 9px rgba(0,0,0,.6);white-space:nowrap;line-height:1.5;cursor:${dragMode?'grab':'pointer'};">🏢 事業所</div>`,
+    iconSize:null,iconAnchor:[0,12],
+  });
+  officeMarker=L.marker([office.lat,office.lng],{icon:offIcon,draggable:dragMode})
+    .bindPopup(`<div>
+      <div class="ppn">🏢 事業所</div>
+      <div class="ppsub">伊丹市北園2-2-5 ノースコートⅡ</div>
+      ${dragMode?'<div class="ppdrag">📌 ドラッグして位置を修正できます</div>':''}
+    </div>`,{maxWidth:220});
+  officeMarker.on('dragend',e=>{
+    const {lat,lng}=e.target.getLatLng();
+    office.lat=Math.round(lat*100000)/100000;
+    office.lng=Math.round(lng*100000)/100000;
+    saveO(office);
+    officeMarker.bindPopup('<div class="ppn">🏢 事業所</div><div class="ppdrag">✅ 保存しました</div>',{maxWidth:180}).openPopup();
+  });
+  officeMarker.addTo(map);
+  bounds.push([office.lat,office.lng]);
+
+  if(bounds.length) map.fitBounds(L.latLngBounds(bounds),{padding:[40,40],maxZoom:13});
+}
+
+function mkIcon(color,text,label,drag){
+  return L.divIcon({
+    className:'',
+    html:`<div style="background:${color};color:${text};font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:700;padding:3px 9px;border-radius:12px;border:2.5px solid ${drag?'#aaffaa':'rgba(255,255,255,.9)'};box-shadow:${drag?'0 0 10px rgba(100,220,100,.45),':''}0 2px 9px rgba(0,0,0,.6);white-space:nowrap;line-height:1.5;cursor:${drag?'grab':'pointer'};">${label}</div>`,
+    iconSize:null,iconAnchor:[0,12],
+  });
+}
+
+// ================================================================
+// ドラッグモード
+// ================================================================
+function toggleDrag(){
+  dragMode=!dragMode;
+  const btn=document.getElementById('moveBtn');
+  const hint=document.getElementById('dragHint');
+  btn.classList.toggle('active',dragMode);
+  btn.textContent=dragMode?'📌 修正モード終了':'📌 位置を修正する';
+  hint.classList.toggle('show',dragMode);
+  buildMarkers();
+}
+
+// ================================================================
+// エリアトグル
+// ================================================================
+function toggleArea(area,el){
+  if(el.classList.contains('on')){map.removeLayer(layers[area]);el.classList.replace('on','off');}
+  else{layers[area].addTo(map);el.classList.replace('off','on');}
+}
+
+// ================================================================
+// 編集パネル
+// ================================================================
+function openPanel(){document.getElementById('panel').classList.add('open');renderList();}
+function closePanel(){document.getElementById('panel').classList.remove('open');}
+
+function renderList(){
+  const c=document.getElementById('panelList');c.innerHTML='';
+  ['北部','西部','南部西部','南部'].forEach(area=>{
+    const al=users.filter(u=>u.area===area);if(!al.length)return;
+    const a=AREAS[area];
+    const t=document.createElement('div');
+    t.className='sec-title';t.style.cssText=`background:${a.color}20;color:${a.color}`;
+    t.textContent=`${a.label}（${al.length}名）`;c.appendChild(t);
+    al.forEach(u=>{
+      const gi=users.indexOf(u);
+      const row=document.createElement('div');row.className='urow';
+      row.innerHTML=`<div class="udot" style="background:${a.color}"></div>
+        <div class="uname">${u.name}</div>
+        <button class="xbtn" onclick="delUser(${gi})">✕</button>`;
+      row.addEventListener('click',e=>{
+        if(e.target.classList.contains('xbtn'))return;
+        closePanel();map.setView([u.lat,u.lng],16,{animate:true});
+      });
+      c.appendChild(row);
+    });
+  });
+}
+
+function addUser(){
+  const name=document.getElementById('fn').value.trim();
+  const area=document.getElementById('fa').value;
+  const pickup=document.getElementById('fp').value.trim();
+  const lat=parseFloat(document.getElementById('flat').value);
+  const lng=parseFloat(document.getElementById('flng').value);
+  if(!name){alert('名前を入力してください');return;}
+  if(!pickup){alert('送迎場所を入力してください');return;}
+  if(isNaN(lat)||isNaN(lng)){
+    alert('緯度・経度を入力してください\n\nGoogleマップで場所を検索 →\n地図上を右クリック → 一番上の数字をクリックでコピー');return;
+  }
+  users.push({area,name,pickup,lat,lng});
+  saveU(users);buildMarkers();renderList();
+  ['fn','fp','flat','flng'].forEach(id=>document.getElementById(id).value='');
+}
+
+function delUser(idx){
+  if(!confirm(`「${users[idx].name}」を削除しますか？`))return;
+  users.splice(idx,1);saveU(users);buildMarkers();renderList();
+}
+
+function resetPositions(){
+  if(!confirm('全員の位置を初期データに戻します（名前・送迎場所は維持）。よろしいですか？'))return;
+  users.forEach(u=>{
+    const d=DEFAULT_USERS.find(d=>d.name===u.name);
+    if(d){u.lat=d.lat;u.lng=d.lng;}
+  });
+  office={...DEFAULT_OFFICE};
+  saveU(users);saveO(office);buildMarkers();
+}
+
+function resetAll(){
+  if(!confirm('すべて初期データに戻します。よろしいですか？'))return;
+  users=cloneD(DEFAULT_USERS);office={...DEFAULT_OFFICE};
+  saveU(users);saveO(office);buildMarkers();renderList();
+}
+
+// 起動
+buildMarkers();
+</script>
+</body>
+</html>
